@@ -1,0 +1,257 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Go Fever</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#12100c;font-family:Inter,sans-serif;color:#ece4d2;overflow:hidden}
+#hud{position:fixed;top:14px;left:14px;background:rgba(16,13,9,.78);padding:13px 15px;border-radius:10px;z-index:5;max-width:250px}
+#hud h1{font-family:Fraunces,serif;font-weight:600;font-size:18px;margin:0 0 2px;letter-spacing:.04em}
+#hud h1 em{font-style:normal;font-weight:300;color:#c9a45a}
+#hud .s{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#948b73;margin-bottom:6px}
+#hud .m{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#b5ab90;line-height:1.7}
+#hud .m b{color:#ece4d2;font-weight:500}
+#score{position:fixed;top:14px;right:14px;background:rgba(16,13,9,.78);padding:12px 16px;border-radius:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;z-index:5;text-align:right}
+#score .lbl{color:#948b73;font-size:9px;letter-spacing:.1em}
+#score .big{font-size:17px;color:#e8c46a;font-weight:500}
+#msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(16,13,9,.82);padding:8px 18px;border-radius:8px;font-family:Fraunces,serif;font-weight:300;font-size:15px;color:#e8c46a;z-index:5}
+#pass{position:fixed;bottom:16px;left:16px;background:#8a2f2a;border:none;color:#ece4d2;font-family:Inter,sans-serif;font-size:12.5px;padding:10px 18px;border-radius:8px;cursor:pointer;z-index:5}
+#charms{position:fixed;top:130px;right:14px;display:flex;flex-direction:column;gap:6px;z-index:5}
+#charms .ch{background:rgba(30,26,18,.85);border:1px solid #4a4030;border-radius:7px;padding:6px 10px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#c9b888;max-width:175px}
+#charms .ch b{color:#e8c46a;font-weight:500}
+#shop{position:fixed;inset:0;background:rgba(10,9,7,.92);display:none;align-items:center;justify-content:center;z-index:10}
+#shop .card{background:#1a1712;border:1px solid #3a342a;border-radius:12px;padding:32px 38px;max-width:640px;text-align:center}
+#shop h2{font-family:Fraunces,serif;font-weight:300;font-size:28px;margin:0 0 4px}
+#shop .sub{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#948b73;margin-bottom:20px}
+#shop .opts{display:flex;gap:14px;justify-content:center}
+#shop .opt{background:#231e15;border:1px solid #4a4030;border-radius:10px;padding:16px;width:165px;cursor:pointer;text-align:left}
+#shop .opt:hover{border-color:#c9a45a}
+#shop .opt b{font-family:Fraunces,serif;font-weight:600;font-size:15px;color:#e8c46a;display:block;margin-bottom:6px}
+#shop .opt span{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#b5ab90;line-height:1.6}
+#end{position:fixed;inset:0;background:rgba(10,9,7,.92);display:none;align-items:center;justify-content:center;z-index:11}
+#end .card{background:#1a1712;border:1px solid #3a342a;border-radius:12px;padding:36px 44px;text-align:center;max-width:440px}
+#end h2{font-family:Fraunces,serif;font-weight:300;font-size:30px;margin:0 0 8px}
+#end p{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#b5ab90;line-height:1.8}
+#end button{margin-top:14px;background:#8a2f2a;border:none;color:#ece4d2;padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px}
+</style></head><body>
+<div id="hud"><h1>Go <em>Fever</em></h1>
+<div class="s">nine by nine, with the fever on</div>
+<div class="m">you are <b>black</b>, first move · click an intersection<br>captures flash · double-pass ends the game<br>win by the ante margin · draft a charm between games</div></div>
+<div id="score"><div class="lbl">ANTE</div><div class="big" id="ante">1 / 3</div>
+<div class="lbl" style="margin-top:5px">MARGIN NEEDED</div><div id="need">win</div>
+<div class="lbl" style="margin-top:5px">CAPTURES</div><div class="big" id="caps">0 - 0</div>
+<div class="lbl" style="margin-top:5px">CHIPS</div><div class="big" id="chips">0</div></div>
+<div id="charms"></div>
+<div id="msg">your move</div>
+<button id="pass">PASS</button>
+<div id="shop"><div class="card"><h2>The Charm Table</h2><div class="sub" id="shopSub"></div><div class="opts" id="opts"></div></div></div>
+<div id="end"><div class="card"><h2 id="endT"></h2><p id="endP"></p><button onclick="location.reload()">another run</button></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const N=9,CELL=1.6,OFF=-(N-1)*CELL/2;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x12100c);
+const cam=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.1,200);
+const ren=new THREE.WebGLRenderer({antialias:true});ren.setSize(innerWidth,innerHeight);ren.setPixelRatio(Math.min(devicePixelRatio,2));document.body.appendChild(ren.domElement);
+scene.add(new THREE.AmbientLight(0x8a8078,.8));
+const key=new THREE.DirectionalLight(0xffe8c0,.85);key.position.set(5,12,7);scene.add(key);
+// board
+const board=new THREE.Mesh(new THREE.BoxGeometry(N*CELL+2.4,1,N*CELL+2.4),new THREE.MeshLambertMaterial({color:0x8a6a3a}));scene.add(board);
+const btop=new THREE.Mesh(new THREE.BoxGeometry(N*CELL+2.2,.06,N*CELL+2.2),new THREE.MeshLambertMaterial({color:0xa8834a}));btop.position.y=.53;scene.add(btop);
+// grid lines
+const lmat=new THREE.LineBasicMaterial({color:0x3a2c16});
+for(let i=0;i<N;i++){
+ const g1=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(OFF+i*CELL,.57,OFF),new THREE.Vector3(OFF+i*CELL,.57,-OFF)]);
+ scene.add(new THREE.Line(g1,lmat));
+ const g2=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(OFF,.57,OFF+i*CELL),new THREE.Vector3(-OFF,.57,OFF+i*CELL)]);
+ scene.add(new THREE.Line(g2,lmat));}
+[[2,2],[6,2],[4,4],[2,6],[6,6]].forEach(([a,b])=>{
+ const s=new THREE.Mesh(new THREE.CircleGeometry(.09,10),new THREE.MeshBasicMaterial({color:0x3a2c16}));
+ s.rotation.x=-Math.PI/2;s.position.set(OFF+a*CELL,.575,OFF+b*CELL);scene.add(s);});
+// invisible hit plane
+const plane=new THREE.Mesh(new THREE.PlaneGeometry(N*CELL+2,N*CELL+2),new THREE.MeshBasicMaterial({visible:false}));
+plane.rotation.x=-Math.PI/2;plane.position.y=.58;scene.add(plane);
+const stoneGeo=new THREE.SphereGeometry(.62,18,12);
+stoneGeo.scale(1,.45,1);
+const matB=new THREE.MeshLambertMaterial({color:0x1c1a18});
+const matW=new THREE.MeshLambertMaterial({color:0xefe6d0});
+let stoneMeshes={},flashes=[];
+function drawStones(){
+ Object.values(stoneMeshes).forEach(m=>scene.remove(m));stoneMeshes={};
+ for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+  const v=grid[i][j];if(!v)continue;
+  const m=new THREE.Mesh(stoneGeo,v===1?matB:matW);
+  m.position.set(OFF+i*CELL,.62+ .0,OFF+j*CELL);
+  scene.add(m);stoneMeshes[i+','+j]=m;}}
+// game state
+let grid,turn,capsB,capsW,passes,prevKey,ante,chips,charms,over,capturesThisGame,cornerOpenings,firstMove;
+const ANTES=[0,5,10];
+const CHARM_POOL=[
+ {id:'atari',n:'Atari Bell',d:'+6 chips for every capture you make'},
+ {id:'komi',n:'Komi Thief',d:'final margin counts +4 your way'},
+ {id:'joseki',n:'Joseki Memory',d:'+3 chips per corner opening you play'},
+ {id:'dragon',n:'Dragon Slayer',d:'capturing 4+ stones in one snap pays +25'},
+ {id:'sente',n:'Sente',d:'your first stone each game is worth +8 chips'},
+ {id:'thick',n:'Thickness',d:'+1 chip per living group you finish with'}];
+function has(id){return charms.some(c=>c.id===id);}
+function gkey(g){return g.map(r=>r.join('')).join('/');}
+function neighbors(i,j){const o=[];if(i>0)o.push([i-1,j]);if(i<N-1)o.push([i+1,j]);if(j>0)o.push([i,j-1]);if(j<N-1)o.push([i,j+1]);return o;}
+function group(g,i,j){
+ const c=g[i][j],seen={},stack=[[i,j]],cells=[];let libs=0;
+ while(stack.length){const [a,b]=stack.pop(),k=a+','+b;
+  if(seen[k])continue;seen[k]=1;cells.push([a,b]);
+  neighbors(a,b).forEach(([x,y])=>{
+   if(g[x][y]===0)libs++;
+   else if(g[x][y]===c&&!seen[x+','+y])stack.push([x,y]);});}
+ return {cells,libs};}
+function legal(g,i,j,c){
+ if(g[i][j]!==0)return null;
+ const t=g.map(r=>r.slice());t[i][j]=c;let captured=[];
+ neighbors(i,j).forEach(([x,y])=>{
+  if(t[x][y]===3-c){const gr=group(t,x,y);
+   if(gr.libs===0){gr.cells.forEach(([a,b])=>{t[a][b]=0;captured.push([a,b]);});}}});
+ const me=group(t,i,j);
+ if(me.libs===0)return null; // suicide
+ return {g:t,captured};}
+function startGame(){
+ grid=Array.from({length:N},()=>Array(N).fill(0));
+ turn=1;passes=0;prevKey='';over=false;capturesThisGame=0;cornerOpenings=0;firstMove=true;
+ drawStones();updateHUD();say('ante '+ante+' - black to play');}
+function updateHUD(){
+ document.getElementById('ante').textContent=ante+' / 3';
+ document.getElementById('need').textContent=ANTES[ante-1]===0?'win':'win by '+ANTES[ante-1]+'+';
+ document.getElementById('caps').textContent=capsB+' - '+capsW;
+ document.getElementById('chips').textContent=chips;
+ document.getElementById('charms').innerHTML=charms.map(c=>'<div class="ch"><b>'+c.n+'</b> · '+c.d+'</div>').join('');}
+function say(s){document.getElementById('msg').textContent=s;}
+function flash(i,j,col){
+ const f=new THREE.Mesh(new THREE.RingGeometry(.5,1.0,20),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.9,side:THREE.DoubleSide}));
+ f.rotation.x=-Math.PI/2;f.position.set(OFF+i*CELL,.6,OFF+j*CELL);
+ scene.add(f);flashes.push({m:f,a:.9});}
+function place(i,j){
+ if(over||turn!==1)return;
+ const r=legal(grid,i,j,1);
+ if(!r){say('no - occupied, suicide, or ko');return;}
+ if(gkey(r.g)===prevKey){say('ko - play elsewhere first');return;}
+ prevKey=gkey(grid);
+ grid=r.g;
+ capsB+=r.captured.length;capturesThisGame+=r.captured.length;
+ if(r.captured.length){
+  r.captured.forEach(([a,b])=>flash(a,b,0xc9a45a));
+  if(has('atari'))chips+=6*r.captured.length;
+  if(has('dragon')&&r.captured.length>=4)chips+=25;
+  say(r.captured.length===1?'snap - one stone off':'SNAP - '+r.captured.length+' stones off the board');}
+ else{
+  if(firstMove&&has('sente'))chips+=8;
+  if(firstMove&&i<3&&j<3||firstMove&&i<3&&j>5||firstMove&&i>5&&j<3||firstMove&&i>5&&j>5){if(has('joseki'))chips+=3;cornerOpenings++;}
+  say('white thinks...');}
+ firstMove=false;
+ passes=0;turn=2;drawStones();updateHUD();
+ setTimeout(aiMove,650);}
+function aiMove(){
+ if(over)return;
+ let best=null,bs=-1;
+ for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+  const r=legal(grid,i,j,2);if(!r)continue;
+  if(gkey(r.g)===prevKey)continue;
+  let sc=Math.random()*6;
+  sc+=r.captured.length*40;
+  // save own atari groups
+  neighbors(i,j).forEach(([x,y])=>{
+   if(grid[x][y]===2&&group(grid,x,y).libs===1)sc+=30;});
+  // don't self-atari pointlessly
+  if(group(r.g,i,j).libs===1)sc-=25;
+  // prefer near stones
+  neighbors(i,j).forEach(([x,y])=>{if(grid[x][y])sc+=3;});
+  const d=Math.abs(i-4)+Math.abs(j-4);sc+=(8-d)*.4;
+  if(sc>bs){bs=sc;best=[i,j,r];}}
+ const empties=grid.flat().filter(v=>!v).length;
+ if(!best||empties<12&&bs<20){aiPass();return;}
+ const [i,j,r]=best;
+ prevKey=gkey(grid);grid=r.g;
+ capsW+=r.captured.length;
+ if(r.captured.length){r.captured.forEach(([a,b])=>flash(a,b,0x7fb4b0));say('white takes '+r.captured.length);}
+ else say('your move');
+ passes=0;turn=1;drawStones();updateHUD();}
+function aiPass(){
+ passes++;
+ if(passes>=2){scoreGame();return;}
+ turn=1;say('white passes - your move');updateHUD();}
+document.getElementById('pass').onclick=()=>{
+ if(over||turn!==1)return;
+ passes++;turn=2;
+ if(passes>=2){scoreGame();return;}
+ say('you pass');setTimeout(aiMove,600);};
+function scoreGame(){
+ over=true;
+ // area scoring: stones + surrounded empties, komi 5.5 white
+ let scoreB=0,scoreW=5.5;
+ const seen={};
+ for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+  if(grid[i][j]===1)scoreB++;
+  else if(grid[i][j]===2)scoreW++;
+  else if(!seen[i+','+j]){
+   // flood empty region
+   const stack=[[i,j]],reg=[];let touch=0;seen[i+','+j]=1;
+   while(stack.length){const [a,b]=stack.pop();reg.push([a,b]);
+    neighbors(a,b).forEach(([x,y])=>{
+     if(grid[x][y]===0&&!seen[x+','+y]){seen[x+','+y]=1;stack.push([x,y]);}
+     else if(grid[x][y]===1)touch|=1;else if(grid[x][y]===2)touch|=2;});}
+   if(touch===1)scoreB+=reg.length;else if(touch===2)scoreW+=reg.length;}}
+ let margin=scoreB-scoreW+(has('komi')?4:0);
+ // count living groups for thickness
+ if(has('thick')){
+  const seen2={};let groups=0;
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++)
+   if(grid[i][j]===1&&!seen2[i+','+j]){group(grid,i,j).cells.forEach(([a,b])=>seen2[a+','+b]=1);groups++;}
+  chips+=groups;}
+ let earned=Math.round(margin>0?margin*2:0)+capturesThisGame*4;
+ chips+=Math.max(0,earned);
+ const need=ANTES[ante-1],ok=margin>need;
+ drawStones();updateHUD();
+ setTimeout(()=>{
+  if(ok&&ante===3){endRun(true,scoreB,scoreW,margin);}
+  else if(ok){ante++;openShop(scoreB,scoreW,margin);}
+  else endRun(false,scoreB,scoreW,margin);},900);
+ say('counting...');}
+function endRun(won,b,w,margin){
+ document.getElementById('end').style.display='flex';
+ document.getElementById('endT').textContent=won?'The Board Is Yours':'The Run Ends';
+ document.getElementById('endP').textContent=won?
+  'three games taken · final game '+b.toFixed(0)+' to '+w.toFixed(1)+' · '+chips+' chips banked':
+  'game score '+b.toFixed(0)+' to '+w.toFixed(1)+' (margin '+(margin>0?'+':'')+margin.toFixed(1)+') · needed '+(ANTES[ante-1]===0?'the win':'+'+ANTES[ante-1])+' · '+chips+' chips pocketed';}
+function openShop(b,w,margin){
+ const pool=CHARM_POOL.filter(c=>!has(c.id)).sort(()=>Math.random()-.5).slice(0,3);
+ const el=document.getElementById('opts');el.innerHTML='';
+ document.getElementById('shopSub').textContent='game taken '+b.toFixed(0)+' - '+w.toFixed(1)+' · pick a charm for ante '+ante;
+ pool.forEach(c=>{const d=document.createElement('div');d.className='opt';
+  d.innerHTML='<b>'+c.n+'</b><span>'+c.d+'</span>';
+  d.onclick=()=>{charms.push(c);document.getElementById('shop').style.display='none';startGame();};
+  el.appendChild(d);});
+ document.getElementById('shop').style.display='flex';}
+// input
+const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+addEventListener('click',e=>{
+ if(e.target.id==='pass'||over)return;
+ mv.x=(e.clientX/innerWidth)*2-1;mv.y=-(e.clientY/innerHeight)*2+1;
+ ray.setFromCamera(mv,cam);
+ const hit=ray.intersectObject(plane)[0];
+ if(!hit)return;
+ const i=Math.round((hit.point.x-OFF)/CELL),j=Math.round((hit.point.z-OFF)/CELL);
+ if(i<0||i>=N||j<0||j>=N)return;
+ place(i,j);});
+cam.position.set(0,15,13);cam.lookAt(0,0,0);
+let sim=0;
+function loop3(){requestAnimationFrame(loop3);sim+=1/60;
+ flashes.forEach(f=>{f.a-=1/60*1.4;f.m.material.opacity=Math.max(0,f.a);f.m.scale.multiplyScalar(1.03);
+  if(f.a<=0){scene.remove(f.m);}});
+ flashes=flashes.filter(f=>f.a>0);
+ ren.render(scene,cam);}
+loop3();
+addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();ren.setSize(innerWidth,innerHeight);});
+ante=1;chips=0;charms=[];capsB=0;capsW=0;startGame();
+if(location.search.includes('qa=1')){
+ grid=Array.from({length:N},()=>Array(N).fill(0));
+ [[3,3,1],[3,4,1],[4,3,1],[5,5,1],[6,2,1],[2,6,1],
+  [3,2,2],[2,3,2],[4,4,2],[6,6,2],[1,1,2],[7,7,2],[5,4,2]].forEach(([i,j,v])=>grid[i][j]=v);
+ capsB=2;capsW=1;charms=[CHARM_POOL[0]];chips=17;
+ drawStones();updateHUD();say('white thinks...');
+ flash(4,4,0xc9a45a);ren.render(scene,cam);}
+</script></body></html>
